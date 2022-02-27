@@ -1,29 +1,32 @@
 ---
 title: "Oaxaca ONUSIDA"
-author: "Isaac Núñez, Yanink Caro-Vega"
+author: "Isaac Núñez, Yanink Caro Vega"
 output:
   word_document: default
   html_document:
     df_print: paged
 ---
-```{r include= T, run = T}
-#El presente reporte consiste en una descripción de la atención que se brinda a personas que viven con VIH dentro del sistema 'CAPASITS' del estado de Oaxaca con una perspectiva de sistemas. Incluimos lo acordado en el plan de análisis cuantitativo propuesto previamente. En base a la información que se encontró disponible, se describen las interrogantes que si pudieron responderse, cuales no pudieron responderse, y las limitantes en ambos casos en cuanto a la capacidad de los datos conseguidos para contestar las preguntas de interés.
-```
 
-
-
-```{r setup, include = T, warning=F}
+```{r setup, include = F, warning=F}
 setwd("C:/Users/isaac/OneDrive/Documentos/Protocolos_de_investigacion/Chiapas-Oaxaca ONUSIDA")
-
-library(tidyverse);library(lubridate); library(readxl);library(viridis);library(data.table);library(devtools)
-#library(mxmaps)
-
-
 ```
 
 
-```{r importación de bases, include = T, warning=F}
-epi_oaxaca <- read_excel("base_oaxaca_21.xlsx") %>% 
+```{r first chunk, include = F, warning=F}
+
+
+library(tidyverse);library(lubridate); library(readxl);library(viridis);library(data.table);library(devtools); library(flextable);
+library(patchwork)
+#library(mxmaps)
+#capasits_oaxaca <- read_excel("base_oaxaca_21.xlsx")
+load("~/Protocolos_de_investigacion/Chiapas-Oaxaca ONUSIDA/chiapas_onusida/oaxaca_vih/capasits_oaxaca.Rda")
+#plantilla_capasits <- read_excel("PLANTILLA POR CAPASITS DE OAXACA2.xlsx")
+cd4_oaxaca <- read_excel("cd4_oaxaca.xlsx")
+cv_oaxaca <- read_excel("carga_viral_oaxaca.xlsx")
+```
+
+```{r base capasits oaxaca, include = F, warning=F, run = F}
+capasits_oaxaca <- capasits_oaxaca %>% 
   mutate(id_paciente=as.character(id_paciente),
          paciente_ultima_consulta = ymd(paciente_ultima_consulta),
          paciente_notificacion = ymd(paciente_notificacion),
@@ -34,38 +37,111 @@ epi_oaxaca <- read_excel("base_oaxaca_21.xlsx") %>%
          esquema_fecha_inicio = ymd(esquema_fecha_inicio),
          cv_fecha_estudio = ymd(cv_fecha_estudio))
 
-#save(epi_oaxaca, file="epi_oaxaca.Rda")
+#save(capasits_oaxaca, file="capasits_oaxaca.Rda")
 
-## Descripción de la base  
+## Análisis exploratorio breve sobre capasits_oaxaca 
+glimpse(capasits_oaxaca)
+table(capasits_oaxaca$paciente_sexo)
+n_distinct(capasits_oaxaca$id_paciente)
+range(capasits_oaxaca$paciente_ingreso, na.rm = T)
+range(capasits_oaxaca$paciente_f_ultimo_estatus, na.rm = T)
+sum(is.na(capasits_oaxaca$paciente_ingreso))
+sum(is.na(capasits_oaxaca$paciente_notificacion))
+sum(capasits_oaxaca$paciente_estatus=="ACTIVO")
 
+#Pacientes de cd4_oaxaca y cv_oaxaca que están presentes en capasits_oaxaca
+n_distinct(filter(cd4_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)
+n_distinct(filter(cv_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)
+
+
+n_distinct(filter(cd4_oaxaca, id_paciente%in%filter(cv_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)$id_paciente)
 ```
-Recibimos la base 'OAXACA PROYECTO 21' con `r ncol(epi_oaxaca)` variables y `r nrow(epi_oaxaca)` observaciones. 
 
-```{r pacientes y sexo, include = T, warning = F}
+
+Recibimos la base *OAXACA PROYECTO 21*, la cual incluye información sobre todo paciente que recibe atención en el sistema CAPASITS del estado de Oaxaca. De aquí en adelante, nos referiremos a dicha base con el nombre *capasits_oaxaca*, la cual será nuestra base de trabajo. La base cuenta con `r ncol(capasits_oaxaca)` variables y `r nrow(capasits_oaxaca)` observaciones. Las variables incluídas son: `r names(capasits_oaxaca)`. Se encontró un total de `r n_distinct(capasits_oaxaca$id_paciente)` pacientes (únicamente uno con una observación repetida), de los cuales `r sum(capasits_oaxaca$paciente_estatus=="ACTIVO")` se encuentran activos en el sistema CAPASITS (`r round((sum(capasits_oaxaca$paciente_estatus=="ACTIVO")/n_distinct(capasits_oaxaca$id_paciente))*100, 1)`%). Del total de pacientes, `r sum(capasits_oaxaca$paciente_sexo=="F")` son mujeres cis,  `r sum(capasits_oaxaca$paciente_sexo=="M")` son hombres cis, `r sum(capasits_oaxaca$paciente_sexo=="TF")` son mujeres trans y una persona es hombre trans. El rango de fechas de ingreso al sistema CAPASITS fue del `r range(capasits_oaxaca$paciente_ingreso, na.rm = T)[1]` al `r range(capasits_oaxaca$paciente_ingreso, na.rm = T)[2]`. En la **Figura 1A** se muestra el total de pacientes que ingresaron por año, mientras que en la **Figura 1B** se muestra el total de pacientes que ingresaron por año y por género. La fecha en la cual se registró la última consulta fue el `r range(capasits_oaxaca$paciente_f_ultimo_estatus, na.rm = T)[2]`.  
+
+```{r figura 1 a y b, include= F, echo= F, warning=F}
+
+#División únicamente por año
+capasits_oaxaca_figura <- capasits_oaxaca %>% 
+  mutate(ano_ingreso= factor(year(paciente_ingreso))) %>% 
+  group_by(ano_ingreso) %>% 
+  count()
+
+
+capasits_oaxaca_figura_plot <- ggplot(capasits_oaxaca_figura, aes(x= as.integer(n), y=ano_ingreso))+
+  geom_segment(aes(yend = ano_ingreso), xend = 0, colour = "grey50")+
+  geom_point(size = 3)+
+  ggtitle("")+
+  theme_bw()+
+  ylab("Año de ingreso")+
+  xlab("# de pacientes")+
+  theme(panel.grid.major.y = element_blank())+
+  scale_colour_viridis(discrete=TRUE)
+  
+
+#División por sexo
+capasits_oaxaca_figura_s <- capasits_oaxaca %>% 
+  mutate(ano_ingreso= factor(year(paciente_ingreso)),
+         paciente_sexo= case_when(paciente_sexo=="F"~"Mujer cis",
+                                  paciente_sexo=="M"~"Hombre cis",
+                                  paciente_sexo=="TF"~"Mujer trans",
+                                  paciente_sexo=="TM"~"Hombre trans")) %>% 
+  group_by(ano_ingreso, paciente_sexo) %>% 
+  count()
+
+capasits_oaxaca_figura_plot_s <- ggplot(capasits_oaxaca_figura_s, aes(x= as.integer(n), y=ano_ingreso, colour=paciente_sexo))+
+  geom_segment(aes(yend = ano_ingreso), xend = 0, colour = "grey50")+
+  geom_point( size = 3)+
+  ggtitle("")+
+  theme_bw()+
+  ylab("")+
+  xlab("# de pacientes")+
+  theme(panel.grid.major.y = element_blank(),
+          legend.title=element_blank(),
+        legend.position=c(0.7,0.2))+
+scale_colour_viridis(discrete=TRUE)
+  
+figura_1 <- capasits_oaxaca_figura_plot+capasits_oaxaca_figura_plot_s+plot_annotation(tag_levels='A')
+
+
+#ggsave(plot = figura_1, width = 6.1, height = 6.5, dpi = 300, filename = "figura_1.png")
+```
+![Figura 1](figura_1.png)
+**Figura 1**. Número de pacientes que ingresaron cada año a CAPASITS Oaxaca en total (A) y desglosado por género (B).
+</br>
+</br>
+</br>
+</br>
+
+Se recibieron además dos bases adicionales, las cuales incluyen información sobre todas las mediciones de linfocitos T CD4 y carga viral de VIH realizadas en pacientes de CAPASITS Oaxaca. En la base de linfocitos T CD4 (llamada *cd4_oaxaca*) hay información sobre `r n_distinct(cd4_oaxaca$id_paciente)` pacientes, mientras que en la de carga viral de VIH (llamada *cv_oaxaca*) hay información sobre `r n_distinct(cv_oaxaca$id_paciente)` pacientes. De los pacientes presentes en *capasits_oaxaca*, `r n_distinct(filter(cd4_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)` (`r round(n_distinct(filter(cd4_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)/n_distinct(capasits_oaxaca$id_paciente), 1)`%) tuvieron información sobre linfocitos T CD4 en la base *cd4_oaxaca*. Asimismo,  `r n_distinct(filter(cv_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)` (`r round(n_distinct(filter(cv_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)/n_distinct(capasits_oaxaca$id_paciente), 1)`%) tuvieron información sobre carga viral de VIH en *cv_oaxaca*. Todos los pacienes con información sobre carga viral también tuvieron información sobre linfocitos T CD4, de manera que hubo `r n_distinct(filter(cd4_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)-n_distinct(filter(cv_oaxaca, id_paciente%in%capasits_oaxaca$id_paciente)$id_paciente)` más pacientes con información sobre linfocitos T CD4. En la **Tabla 1** se describen a detalle las características generales de los pacientes incluidos en la base *capasits_oaxaca*
+
+
+```{r pacientes y sexo, include = F, warning = F}
 #####ANÁLISIS DE BASE PRELIMINAR
 
 ######La base quedó con el nombre'epi_oaxaca'
-glimpse(epi_oaxaca)
+glimpse(capasits_oaxaca)
 
 ######Número de filas
-nrow(epi_oaxaca)
+nrow(capasits_oaxaca)
 
 ######Número de identificadores diferentes
-n_distinct(epi_oaxaca$id_paciente)
+n_distinct(capasits_oaxaca$id_paciente)
 #Hay 5921 filas y 5920 identificadores diferentes
-glimpse(epi_oaxaca %>% 
+glimpse(capasits_oaxaca %>% 
   group_by(id_paciente) %>% 
     count() %>% 
   arrange(desc(n)))[1,1] 
 #51151 es el paciente que se repite
-glimpse(filter(epi_oaxaca, id_paciente == 51151))#Únicamente difieren en el esquema de ART que está utilizando, por lo pronto no lo eliminaré
+glimpse(filter(capasits_oaxaca, id_paciente == 51151))#Únicamente difieren en el esquema de ART que está utilizando, por lo pronto no lo eliminaré
 
 ######Pacientes en tratamiento ART ('paciente_tipo' según la variable de la base)
-table(epi_oaxaca$paciente_tipo)
+table(capasits_oaxaca$paciente_tipo)
 #Al parecer todos los pacientes están clasificados como en tratamiento antirretroviral
 
 ######Sexo 
-table(epi_oaxaca$paciente_sexo)
+table(capasits_oaxaca$paciente_sexo)
 
 #Únicamente confirmar que 'TF' signifique mujer trans y que 'TM' signifique hombre trans
 ```
@@ -79,38 +155,38 @@ table(epi_oaxaca$paciente_sexo)
 
 
 
-```{r base oaxaca v1, include = T, warning = F}
+```{r base oaxaca v1, include = F, warning = F}
 #####Edad
-fivenum(epi_oaxaca$paciente_edad)
-nrow(filter(epi_oaxaca, paciente_edad>=18))
-nrow(filter(epi_oaxaca, paciente_edad>=18))/nrow(epi_oaxaca)
+fivenum(capasits_oaxaca$paciente_edad)
+nrow(filter(capasits_oaxaca, paciente_edad>=18))
+nrow(filter(capasits_oaxaca, paciente_edad>=18))/nrow(capasits_oaxaca)
 #Prácticamente todos son mayores de edad
 #La distribución de la edad parece razonable, pero si se puede lo mejor sería que nos dieran la fecha de nacimiento, desconozco cuándo y cómo actualicen la edad de los pacientes
 
 
 #####Pacientes con VIH que están embarazadas (habría que preguntar exactamente cómo definen esta variable y con qué frecuencia la actualizan)
-table(epi_oaxaca$paciente_vih_embarazada)
+table(capasits_oaxaca$paciente_vih_embarazada)
 #Descartar que haya errores de código en cuanto a sexo
-table(EMBARAZADA = epi_oaxaca$paciente_vih_embarazada,
-      SEXO = epi_oaxaca$paciente_sexo)
+table(EMBARAZADA = capasits_oaxaca$paciente_vih_embarazada,
+      SEXO = capasits_oaxaca$paciente_sexo)
 #Parece que al hombre trans lo pusieron como 'NO APLICA'. Es un detalle pequeño, pero creo que valdría la pena que actualizaran esta codificación en su estado porque el término preferido actual es 'personas con capacidad de gestar' (nada más confirmar que por el hecho de ser trans no les asignen la variable de 'NO APLICA')
 #Hay 73 hombres que se clasificaron como 'NO' embarazadas, verificar si esto simplemente fue por error al meter los datos (ej. no sabían que se tenían que poner en 'NO APLICA' o si son hombres trans)
 
 
 ######Última consulta
-range(epi_oaxaca$paciente_ultima_consulta)#Hay pacientes sin info en última consulta
-sum(is.na(epi_oaxaca$paciente_ultima_consulta))#Solo es uno
-glimpse(filter(epi_oaxaca, is.na(paciente_ultima_consulta)))
+range(capasits_oaxaca$paciente_ultima_consulta)#Hay pacientes sin info en última consulta
+sum(is.na(capasits_oaxaca$paciente_ultima_consulta))#Solo es uno
+glimpse(filter(capasits_oaxaca, is.na(paciente_ultima_consulta)))
 #Parece que si tiene último estatus, nomás no tiene fecha de última consulta, según los datos parece que en cuanto se captó se sacó del programa porque tenía ISSSTE, por el momento no creo que haya que excluirlo
 
-range(epi_oaxaca$paciente_ultima_consulta[!is.na(epi_oaxaca$paciente_ultima_consulta)])#Fecha de última consulta con rango implausible
-range(epi_oaxaca$paciente_ultima_consulta[!is.na(epi_oaxaca$paciente_ultima_consulta)&
-                                            epi_oaxaca$paciente_ultima_consulta>="2000-01-01"])#Última fecha de consulta introducida en la base con la fecha más temprana (aparentemente real que no parece un error de codificación) en 2005
+range(capasits_oaxaca$paciente_ultima_consulta[!is.na(capasits_oaxaca$paciente_ultima_consulta)])#Fecha de última consulta con rango implausible
+range(capasits_oaxaca$paciente_ultima_consulta[!is.na(capasits_oaxaca$paciente_ultima_consulta)&
+                                            capasits_oaxaca$paciente_ultima_consulta>="2000-01-01"])#Última fecha de consulta introducida en la base con la fecha más temprana (aparentemente real que no parece un error de codificación) en 2005
 
-nrow(filter(epi_oaxaca, paciente_ultima_consulta>="2000-01-01"))#Únicamente dos pacientes con fecha de consulta previo a este año, uno de los cuales es el paciente con valor faltante en esa variable
+nrow(filter(capasits_oaxaca, paciente_ultima_consulta>="2000-01-01"))#Únicamente dos pacientes con fecha de consulta previo a este año, uno de los cuales es el paciente con valor faltante en esa variable
 
 #La mayoría de pacientes tuvieron su última consulta en 2021
-epi_consulta <- mutate(epi_oaxaca, year_ultima_consulta=year(paciente_ultima_consulta)) %>% 
+epi_consulta <- mutate(capasits_oaxaca, year_ultima_consulta=year(paciente_ultima_consulta)) %>% 
   group_by(year_ultima_consulta) %>% 
   count() %>% 
   mutate(year_ultima_consulta=as.factor(year_ultima_consulta))
@@ -129,20 +205,20 @@ ggplot(epi_consulta, aes(y=year_ultima_consulta, x = n))+
   
 
 ######Pacientes privados de su libertad
-table(epi_oaxaca$paciente_priv_libertad)
+table(capasits_oaxaca$paciente_priv_libertad)
 #Pocos pacientes privados de su libertad
-table(PRIVADOS_LIBERTAD=epi_oaxaca$paciente_priv_libertad,
-      SEXO=epi_oaxaca$paciente_sexo)
+table(PRIVADOS_LIBERTAD=capasits_oaxaca$paciente_priv_libertad,
+      SEXO=capasits_oaxaca$paciente_sexo)
 #Distinción por sexo, a destacar que parece que no hay pacientes trans, lo cual podría significar a su vez algo bastante malo
 
 
 ######Paciente notificación. No estoy seguro que significa, será la fecha de diagnóstico?
-range(epi_oaxaca$paciente_notificacion)#Algunos no tienen ese dato
-sum(is.na(epi_oaxaca$paciente_notificacion))#Sólo 4
-glimpse(filter(epi_oaxaca, is.na(paciente_notificacion)))#No encuentro una causa obvia para la falta de este dato, supongo que fue únicamente error al meter la información
-range(epi_oaxaca$paciente_notificacion[!is.na(epi_oaxaca$paciente_notificacion)])#Primera fecha de notificación en 1984, no creo que sea esta la fecha del primer caso de VIH en oaxaca, o sí? Habría que revisar
+range(capasits_oaxaca$paciente_notificacion)#Algunos no tienen ese dato
+sum(is.na(capasits_oaxaca$paciente_notificacion))#Sólo 4
+glimpse(filter(capasits_oaxaca, is.na(paciente_notificacion)))#No encuentro una causa obvia para la falta de este dato, supongo que fue únicamente error al meter la información
+range(capasits_oaxaca$paciente_notificacion[!is.na(capasits_oaxaca$paciente_notificacion)])#Primera fecha de notificación en 1984, no creo que sea esta la fecha del primer caso de VIH en oaxaca, o sí? Habría que revisar
 
-epi_notificacion <- mutate(epi_oaxaca, year_paciente_notificacion=year(paciente_notificacion)) %>% 
+epi_notificacion <- mutate(capasits_oaxaca, year_paciente_notificacion=year(paciente_notificacion)) %>% 
   group_by(year_paciente_notificacion) %>% 
   count() %>% 
   mutate(year_paciente_notificacion=as.factor(year_paciente_notificacion))
@@ -161,12 +237,12 @@ ggplot(epi_notificacion, aes(y=year_paciente_notificacion, x = n))+
 
 
 #####Paciente ingreso
-range(epi_oaxaca$paciente_ingreso)#Algunos no tienen ese dato
-sum(is.na(epi_oaxaca$paciente_ingreso))#Sólo 14
-glimpse(filter(epi_oaxaca, is.na(paciente_ingreso)))#No encuentro una causa obvia para la falta de este dato, supongo que fue únicamente error al meter la información
-range(epi_oaxaca$paciente_ingreso[!is.na(epi_oaxaca$paciente_ingreso)])#Primera fecha de ingreso en 1994, este año se fundó COESIDA entonces supongo que si es únicamente referente a este servicio
+range(capasits_oaxaca$paciente_ingreso)#Algunos no tienen ese dato
+sum(is.na(capasits_oaxaca$paciente_ingreso))#Sólo 14
+glimpse(filter(capasits_oaxaca, is.na(paciente_ingreso)))#No encuentro una causa obvia para la falta de este dato, supongo que fue únicamente error al meter la información
+range(capasits_oaxaca$paciente_ingreso[!is.na(capasits_oaxaca$paciente_ingreso)])#Primera fecha de ingreso en 1994, este año se fundó COESIDA entonces supongo que si es únicamente referente a este servicio
 
-epi_ingreso <- mutate(epi_oaxaca, paciente_ingreso=year(paciente_ingreso)) %>% 
+epi_ingreso <- mutate(capasits_oaxaca, paciente_ingreso=year(paciente_ingreso)) %>% 
   group_by(paciente_ingreso) %>% 
   count() %>% 
   mutate(paciente_ingreso=as.factor(paciente_ingreso))
@@ -187,11 +263,11 @@ ggplot(epi_ingreso, aes(y=paciente_ingreso, x = n))+
 
 
 #####Paciente SAI (centro de atención)
-table(epi_oaxaca$paciente_sai)
+table(capasits_oaxaca$paciente_sai)
 #Parece que sólo hay dos centros
 
 #Aquí quiero ver si los dos han estado siempre activos o si francamente alguno dejó de recibir pacientes en algún momento
-epi_sai <- mutate(epi_oaxaca, paciente_ingreso=year(paciente_ingreso)) %>% 
+epi_sai <- mutate(capasits_oaxaca, paciente_ingreso=year(paciente_ingreso)) %>% 
   group_by(paciente_sai, paciente_ingreso) %>% 
   count() %>% 
   mutate(paciente_ingreso=as.factor(paciente_ingreso))
@@ -209,13 +285,13 @@ ggplot(epi_sai, aes(y=paciente_ingreso, x = n, fill = paciente_sai))+
 
 
 #####Paciente fecha alta 
-sum(is.na(epi_oaxaca$paciente_fecha_alta))
+sum(is.na(capasits_oaxaca$paciente_fecha_alta))
 #parece que todos tienen este dato. ¿A qué se refieren con fecha de alta? Definitivamente no es alta médica, ya que todas las persoans lo tienen, tampoco es fecha de ingreso porque difiere a la otra en las fechas
-range(epi_oaxaca$paciente_fecha_alta)
+range(capasits_oaxaca$paciente_fecha_alta)
 
 
 ######Estatus de los pacientes
-table(epi_oaxaca$paciente_estatus)
+table(capasits_oaxaca$paciente_estatus)
 #Habría que preguntar qué significan los siguientes dos estatus:
 #'EN DERIVACION DERECHOHABIENCIA"
 #'EN SUSPENSION'
@@ -223,49 +299,49 @@ table(epi_oaxaca$paciente_estatus)
 
 
 #####Paciente causa baja
-table(epi_oaxaca$paciente_causa_baja)
+table(capasits_oaxaca$paciente_causa_baja)
 #Cómo determinan que alguien se da de alta médica? Formalmente una persona que vive con VIH nunca está de alta médica. Cómo definieron abandono? Es posible que estos abandonos sean defunciones o migraciones no detectadas?
 
 
 #####Paciente fecha de defunción
-sum(!is.na(epi_oaxaca$paciente_fecha_defuncion))
+sum(!is.na(capasits_oaxaca$paciente_fecha_defuncion))
 #Este número (658) difiere al número de defunciones totales que tienen registradas (848), hay algún motivo por el cuál no se tenga la fecha de defunción?
-table(DEFUNCION_CON_FECHA=!is.na(epi_oaxaca$paciente_fecha_defuncion),
-      CAUSA_DE_BAJA=epi_oaxaca$paciente_causa_baja)
+table(DEFUNCION_CON_FECHA=!is.na(capasits_oaxaca$paciente_fecha_defuncion),
+      CAUSA_DE_BAJA=capasits_oaxaca$paciente_causa_baja)
 #Aquí nomás podemos reclasificar a un paciente que tiene como causa de baja "ABANDONO" pero tiene una fecha de muerte
 #Quizá con la fecha de último estatus
 
 
 #Fecha de últimop estatus
-range(epi_oaxaca$paciente_f_ultimo_estatus)
+range(capasits_oaxaca$paciente_f_ultimo_estatus)
 #Todos tienen este dato, alguno de los que fallecieron tendrá una fecha posterior a la de muerte (o viceversa)?
 
-nrow(filter(epi_oaxaca, (!is.na(paciente_fecha_defuncion)|paciente_causa_baja=="DEFUNCION")& paciente_f_ultimo_estatus>paciente_fecha_defuncion))
+nrow(filter(capasits_oaxaca, (!is.na(paciente_fecha_defuncion)|paciente_causa_baja=="DEFUNCION")& paciente_f_ultimo_estatus>paciente_fecha_defuncion))
 #641 de quienes fallecieron tienen una fecha de úlimo estatus posterior a la fecha de muerte, en qué consta la fecha de últimoe estatus?
 
-nrow(filter(epi_oaxaca, (!is.na(paciente_fecha_defuncion)|paciente_causa_baja=="DEFUNCION")& paciente_f_ultimo_estatus<paciente_fecha_defuncion))
+nrow(filter(capasits_oaxaca, (!is.na(paciente_fecha_defuncion)|paciente_causa_baja=="DEFUNCION")& paciente_f_ultimo_estatus<paciente_fecha_defuncion))
 #Sólo 5 tienen una fecha de muerte posterior a la de último estatus, esto es más fácil de explicar y corregir
 
 
 #Esquema fecha inicio
-range(epi_oaxaca$esquema_fecha_inicio)#Personas sin ese dato
-sum(is.na(epi_oaxaca$esquema_fecha_inicio))#Sólo 70, tienen perdida la fecha de inicio de esquema o realmente nunca lo iniciaron?
-glimpse(filter(epi_oaxaca, is.na(epi_oaxaca$esquema_fecha_inicio)))
+range(capasits_oaxaca$esquema_fecha_inicio)#Personas sin ese dato
+sum(is.na(capasits_oaxaca$esquema_fecha_inicio))#Sólo 70, tienen perdida la fecha de inicio de esquema o realmente nunca lo iniciaron?
+glimpse(filter(capasits_oaxaca, is.na(capasits_oaxaca$esquema_fecha_inicio)))
 #Sería interesante, una vez confirmado que la variable "paciente notificacion" corresponda a la fecha de diagnóstico, analizar cuánto tiempo tardaron en iniciar ARV desde el diagnóstico (que será lo que haremos con los datos de ccasanet, de aceptarlo Sierra, Brenda, y los demás de ccasanet)
 
 
 #####CD4
-sum(is.na(epi_oaxaca$cd4_resultado))#270 nunca han tenido una toma de CD4 (quiero pensar que el valor incluido en esta base es el último para cada persona)
+sum(is.na(capasits_oaxaca$cd4_resultado))#270 nunca han tenido una toma de CD4 (quiero pensar que el valor incluido en esta base es el último para cada persona)
 #Sería estupendo que nos pasaran el resto de los CD4 para cada persona (igual que la CV)
 
 
 #####Carga viral
-sum(is.na(epi_oaxaca$cv_no_copias))#304 nunca han tenido una cv, por qué difiere este número al de linfocitos CD4?
+sum(is.na(capasits_oaxaca$cv_no_copias))#304 nunca han tenido una cv, por qué difiere este número al de linfocitos CD4?
 
 ```
 
-```{r base capasits, warning=F, include= F}
-plantilla_capasits <- read_excel("PLANTILLA POR CAPASITS DE OAXACA2.xlsx") %>% 
+```{r base capasits, eval= F, run = F, warning=F, include= F}
+plantilla_capasits <- plantilla_capasits %>% 
   mutate(paciente_ultima_consulta= ymd(paciente_ultima_consulta),
          paciente_notificacion= ymd(paciente_notificacion),
          paciente_ingreso=ymd(paciente_ingreso),
