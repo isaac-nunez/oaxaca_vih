@@ -1475,10 +1475,7 @@ table_3 <- data.frame(ano_diagnostico=year_t,
                       )
                       
 
-
 View(table_3)
-
-
 ```
 
 
@@ -1536,5 +1533,76 @@ ggsave(plot = figura_3, width = 6.1, height = 6.5, dpi = 300, filename = "figura
 
 ```
 ![Figura 3](figura_3.png)
+
+```{r figura 4 series de tiempo, include =F, warning=F}
+capasits_ingreso_por_dia <- group_by(capasits_oaxaca_2018_2021, paciente_ingreso) %>% 
+  count()
+
+
+
+plot_ingreso <- ggplot(capasits_ingreso_por_dia, aes(x = paciente_ingreso, y = n))+
+  geom_point( size = 1, alpha = 0.5)+
+  geom_vline(xintercept = ymd("2020-02-28"),
+             colour = "darkred",
+             size = 1.5)+
+  scale_x_date(date_breaks = "2 month",
+               date_labels ="%b %y")+
+  scale_y_continuous(limits = c(0,10),
+                     breaks = seq(from = 0, to = 10, by =1))+
+  theme_bw()+
+  labs(y="Número de pacientes por día",
+       x="Fecha")+
+    geom_smooth(colour = "red", fill = "violet", se = T, method = 'glm', method.args = list(family = 'poisson'),
+              formula = y~splines::ns(x,20))+
+  theme(axis.text.x = element_text(angle = 90, vjust = .25, hjust = 0.95, 
+                               size = 12, face = "bold", colour="black"),
+        axis.title.x = element_text(face = "bold", size = 14),
+        axis.ticks = element_line(size = 1, colour = "black"),
+        axis.title.y = element_text(face = "bold", size = 14),
+        axis.text.y = element_text(size = 14, face = "bold", colour = "black"),
+        plot.title = element_text(size = 14, face = "bold"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(colour = "black"))
+
+
+#GRÁFICAS DE DIAGNÓSTICO
+capasits_diagnostico_por_dia <- group_by(capasits_oaxaca_t3, paciente_ingreso) %>% 
+  count()
+
+
+
+plot_diagnosticos <- ggplot(capasits_diagnostico_por_dia, aes(x = paciente_ingreso, y = n))+
+  geom_point( size = 1, alpha = 0.5)+
+  geom_vline(xintercept = ymd("2020-02-28"),
+             colour = "darkred",
+             size = 1.5)+
+  scale_x_date(date_breaks = "2 month",
+               date_labels ="%b %y")+
+  scale_y_continuous(limits = c(0,5),
+                     breaks = seq(from = 0, to = 5, by =1))+
+  theme_bw()+
+  labs(y="", x="Fecha")+
+    geom_smooth(colour = "red", fill = "violet", se = T, method = 'glm', method.args = list(family = 'poisson'),
+              formula = y~splines::ns(x,20))+
+  theme(axis.text.x = element_text(angle = 90, vjust = .25, hjust = 0.95, 
+                               size = 12, face = "bold", colour="black"),
+        axis.title.x = element_text(face = "bold", size = 14),
+        axis.ticks = element_line(size = 1, colour = "black"),
+        axis.title.y = element_text(face = "bold", size = 14),
+        axis.text.y = element_text(size = 14, face = "bold", colour = "black"),
+        plot.title = element_text(size = 14, face = "bold"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(colour = "black"))
+
+
+figura_4 <- plot_ingreso+plot_diagnosticos+plot_annotation(tag_levels="A")
+
+ggsave(plot = figura_4, width = 9, height = 5, dpi = 300, filename = "figura_4.png")
+```
+![Figura 4](figura_4.png)
 
 
