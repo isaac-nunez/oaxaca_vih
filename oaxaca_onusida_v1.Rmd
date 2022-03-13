@@ -389,60 +389,6 @@ figura_2 <- capasits_oaxaca_reciente_figura+capasits_oaxaca_reciente_figura_s+pl
 
 ![Figura 2](figura_2.png)
 
-```{r figura 3 a y b, include= F, echo= F, warning=F}
-
-#División únicamente por año
-capasits_oaxaca_reciente_figura_not <- capasits_oaxaca_2018_2021_not %>% 
-  mutate(ano_notificacion= factor(year(paciente_notificacion))) %>% 
-  group_by(ano_notificacion, paciente_sai) %>% 
-  count()
-
-
-capasits_oaxaca_reciente_figura_not <- ggplot(capasits_oaxaca_reciente_figura_not, aes(x= as.integer(n), y=ano_notificacion, colour=paciente_sai))+
-  geom_segment(aes(yend = ano_notificacion), xend = 0, colour = "grey50")+
-  geom_point(size = 3)+
-  ggtitle("")+
-  theme_bw()+
-  ylab("Año de diagnóstico")+
-  xlab("# de pacientes")+
-  theme(panel.grid.major.y = element_blank(),
-        legend.title=element_blank(),
-        legend.position=c(0.4,0.3),
-        legend.text = element_text(size=7.5))+
-  scale_colour_viridis(discrete=TRUE)
-  
-
-#División por sexo
-capasits_oaxaca_reciente_figura_s_not <- capasits_oaxaca_2018_2021_not %>% 
-  mutate(ano_notificacion= factor(year(paciente_notificacion)),
-         paciente_sexo= case_when(paciente_sexo=="F"~"Mujer cis",
-                                  paciente_sexo=="M"~"Hombre cis",
-                                  paciente_sexo=="TF"~"Mujer trans",
-                                  paciente_sexo=="TM"~"Hombre trans")) %>% 
-  group_by(ano_notificacion, paciente_sexo, paciente_sai) %>% 
-  count()
-
-capasits_oaxaca_reciente_figura_s_not <- ggplot(capasits_oaxaca_reciente_figura_s_not, aes(x= as.integer(n), y=ano_notificacion, colour=paciente_sexo))+
-  geom_segment(aes(yend = ano_notificacion), xend = 0, colour = "grey50")+
-  geom_point( size = 3)+
-  ggtitle("")+
-  theme_bw()+
-  ylab("")+
-  xlab("# de pacientes")+
-  theme(panel.grid.major.y = element_blank(),
-          legend.title=element_blank(),
-        legend.position=c(0.7,0.2))+
-scale_colour_viridis(discrete=TRUE)+
-  facet_wrap(~paciente_sai, nrow=2)
-  
-figura_3 <- capasits_oaxaca_reciente_figura_not+capasits_oaxaca_reciente_figura_s_not+plot_annotation(tag_levels='A')
-
-
-#ggsave(plot = figura_3, width = 6.1, height = 6.5, dpi = 300, filename = "figura_3.png")
-
-
-```
-![Figura 3](figura_3.png)
 
 
 ```{r bases adicionales de 2018-2021 cd4 y carga viral, include = F, warning=F}
@@ -740,6 +686,199 @@ centro_salina_t2 <- c(str_c(sum(filter(capasits_oaxaca_t2, ano_ingreso=="2018")$
                                  round(sum(capasits_oaxaca_t2$paciente_sai=="CAPASITS - Salina Cruz")/
                                          nrow(capasits_oaxaca_t2), 3)*100, "%)"))
 
+
+
+
+#CD4 al inicio
+cd4_oaxaca_base_primera_toma <- mutate(cd4_oaxaca_2018_2021, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  arrange(fecha_toma) %>% 
+  slice_head() %>% 
+  mutate(tipo_toma = "primera")
+
+cd4_oaxaca_base_ultima_toma <- mutate(cd4_oaxaca_2018_2021, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  arrange(fecha_toma) %>% 
+  slice_tail()%>% 
+  mutate(tipo_toma = "ultima")
+
+cd4_oaxaca_base_toma_al_ingreso <- mutate(cd4_oaxaca_2018_2021, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  mutate(tipo_toma = "ingreso") %>% 
+  left_join(select(capasits_oaxaca_t2, id_paciente,  paciente_ingreso) %>% mutate(id_paciente=as.double(id_paciente)), by= "id_paciente") %>% 
+  mutate(fecha_cd4_fecha_ingreso=ifelse(fecha_toma-paciente_ingreso>=0, fecha_toma-paciente_ingreso,
+                                        -(fecha_toma-paciente_ingreso))) %>% 
+  slice_min(fecha_cd4_fecha_ingreso)
+
+
+#Base con CD4 para oaxaca
+cd4_oaxaca_t2 <- rbind(cd4_oaxaca_base_primera_toma, cd4_oaxaca_base_ultima_toma, select(cd4_oaxaca_base_toma_al_ingreso, -paciente_ingreso,
+                                                                                           -fecha_cd4_fecha_ingreso)) %>% 
+  left_join(select(capasits_oaxaca_t2, id_paciente,  paciente_ingreso) %>% mutate(id_paciente=as.double(id_paciente)), by= "id_paciente") %>% 
+  mutate(ano_ingreso=year(paciente_ingreso))
+
+
+
+cd4_tiempo <- function(x){
+  c(str_c(median(filter(cd4_oaxaca_t2, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado), " (", 
+                         fivenum(filter(cd4_oaxaca_t2, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t2, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cd4_oaxaca_t2, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cd4_oaxaca_t2, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t2, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cd4_oaxaca_t2, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cd4_oaxaca_t2, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t2, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cd4_oaxaca_t2, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cd4_oaxaca_t2, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t2, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cd4_oaxaca_t2, !is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cd4_oaxaca_t2, !is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t2, !is.na(resultado)&tipo_toma==x)$resultado)[4], ")"))
+}
+
+
+cd4_inicio_t2 <- cd4_tiempo("primera")
+
+#Los primeros CD4 que se tomaron
+cd4_inicio_t2 <- cd4_tiempo("primera")
+
+
+#CD4 más recientes tomados
+cd4_ultima_t2 <- cd4_tiempo("ultima")
+
+#CD4 al ingreso
+cd4_ingreso_t2 <- cd4_tiempo("ingreso")
+
+
+
+###CARGA VIRAL
+#CD4 al inicio
+cv_oaxaca_base_primera_toma <- mutate(cv_oaxaca_2018_2021, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  arrange(fecha_toma) %>% 
+  slice_head() %>% 
+  mutate(tipo_toma = "primera")
+
+cv_oaxaca_base_ultima_toma <- mutate(cv_oaxaca_2018_2021, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  arrange(fecha_toma) %>% 
+  slice_tail()%>% 
+  mutate(tipo_toma = "ultima")
+
+cv_oaxaca_base_toma_al_ingreso <- mutate(cv_oaxaca_2018_2021, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  mutate(tipo_toma = "ingreso") %>% 
+  left_join(select(capasits_oaxaca_t2, id_paciente,  paciente_ingreso) %>% mutate(id_paciente=as.double(id_paciente)), by= "id_paciente") %>% 
+  mutate(fecha_cv_fecha_ingreso=ifelse(fecha_toma-paciente_ingreso>=0, fecha_toma-paciente_ingreso,
+                                        -(fecha_toma-paciente_ingreso))) %>% 
+  slice_min(fecha_cv_fecha_ingreso)
+
+
+#Base con CD4 para oaxaca
+cv_oaxaca_t2 <- rbind(cv_oaxaca_base_primera_toma, cv_oaxaca_base_ultima_toma, select(cv_oaxaca_base_toma_al_ingreso, -paciente_ingreso,
+                                                                                           -fecha_cv_fecha_ingreso)) %>% 
+  left_join(select(capasits_oaxaca_t2, id_paciente,  paciente_ingreso) %>% mutate(id_paciente=as.double(id_paciente)), by= "id_paciente") %>% 
+  mutate(ano_ingreso=year(paciente_ingreso),
+         indetectable_50=ifelse(resultado<=50, T, F),
+         indetectable_200=ifelse(resultado<=200, T, F))
+
+
+
+cv_tiempo <- function(x){
+  c(str_c(median(filter(cv_oaxaca_t2, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado), " (", 
+                         fivenum(filter(cv_oaxaca_t2, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t2, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cv_oaxaca_t2, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cv_oaxaca_t2, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t2, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cv_oaxaca_t2, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cv_oaxaca_t2, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t2, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cv_oaxaca_t2, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cv_oaxaca_t2, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t2, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cv_oaxaca_t2, !is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cv_oaxaca_t2, !is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t2, !is.na(resultado)&tipo_toma==x)$resultado)[4], ")"))
+}
+
+
+
+#Los primeros CD4 que se tomaron
+cv_inicio_t2 <- cv_tiempo("primera")
+
+#CD4 más recientes tomados
+cv_ultima_t2 <- cv_tiempo("ultima")
+
+#CD4 al ingreso
+cv_ingreso_t2 <- cv_tiempo("ingreso")
+
+
+##########Carga viral indetectable
+cv_indetectable <- function(x, y){
+  if(y==50){
+  c(str_c(sum(filter(cv_oaxaca_t2, ano_ingreso=="2018"&tipo_toma==x)$indetectable_50==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t2, ano_ingreso=="2018"&tipo_toma==x)$indetectable_50==T)/
+                                         nrow(filter(cv_oaxaca_t2, ano_ingreso=="2018"&tipo_toma==x)), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(cv_oaxaca_t2, ano_ingreso=="2019"&tipo_toma==x)$indetectable_50==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t2, ano_ingreso=="2019"&tipo_toma==x)$indetectable_50==T)/
+                                         nrow(filter(cv_oaxaca_t2, ano_ingreso=="2019"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(cv_oaxaca_t2, ano_ingreso=="2020"&tipo_toma==x)$indetectable_50==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t2, ano_ingreso=="2020"&tipo_toma==x)$indetectable_50==T)/
+                                         nrow(filter(cv_oaxaca_t2, ano_ingreso=="2020"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(cv_oaxaca_t2,ano_ingreso=="2021"&tipo_toma==x)$indetectable_50==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t2, ano_ingreso=="2021"&tipo_toma==x)$indetectable_50==T)/
+                                         nrow(filter(cv_oaxaca_t2, ano_ingreso=="2021"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(cv_oaxaca_t2$indetectable_50==T), " (", 
+                                 round(sum(cv_oaxaca_t2$indetectable_50==T)/
+                                         nrow(cv_oaxaca_t2), 3)*100, "%)"))
+  }else{
+      c(str_c(sum(filter(cv_oaxaca_t2, ano_ingreso=="2018"&tipo_toma==x)$indetectable_200==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t2, ano_ingreso=="2018"&tipo_toma==x)$indetectable_200==T)/
+                                         nrow(filter(cv_oaxaca_t2, ano_ingreso=="2018"&tipo_toma==x)), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(cv_oaxaca_t2, ano_ingreso=="2019"&tipo_toma==x)$indetectable_200==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t2, ano_ingreso=="2019"&tipo_toma==x)$indetectable_200==T)/
+                                         nrow(filter(cv_oaxaca_t2, ano_ingreso=="2019"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(cv_oaxaca_t2, ano_ingreso=="2020"&tipo_toma==x)$indetectable_200==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t2, ano_ingreso=="2020"&tipo_toma==x)$indetectable_200==T)/
+                                         nrow(filter(cv_oaxaca_t2, ano_ingreso=="2020"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(cv_oaxaca_t2,ano_ingreso=="2021"&tipo_toma==x)$indetectable_200==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t2, ano_ingreso=="2021"&tipo_toma==x)$indetectable_200==T)/
+                                         nrow(filter(cv_oaxaca_t2, ano_ingreso=="2021"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(cv_oaxaca_t2$indetectable_200==T), " (", 
+                                 round(sum(cv_oaxaca_t2$indetectable_200==T)/
+                                         nrow(cv_oaxaca_t2), 3)*100, "%)"))
+  }
+}
+#Carga viral más reciente (sólo si al menos 6 meses de seguimiento)
+cv_indetectable_inicial_50_t2 <- cv_indetectable(x="primera", y=50)
+cv_indetectable_inicial_200_t2 <- cv_indetectable(x="primera", y=200)
+
+#Carga viral más reciente (sólo si al menos 6 meses de seguimiento)
+cv_indetectable_ultima_50_t2 <- cv_indetectable(x="ultima", y=50)
+cv_indetectable_ultima_200_t2 <- cv_indetectable(x="ultima", y=200)
+
+#Carga viral más reciente (sólo si al menos 6 meses de seguimiento)
+cv_indetectable_ingreso_50_t2 <- cv_indetectable(x="ingreso", y=50)
+cv_indetectable_ingreso_200_t2 <- cv_indetectable(x="ingreso", y=200)
+
+
+
 ####TABLA 2 
 table_2 <- data.frame(ano_ingreso=year_t,
                       #####################
@@ -775,7 +914,32 @@ table_2 <- data.frame(ano_ingreso=year_t,
                       #####################
                       paciente_centro_oaxaca= centro_oaxaca_t2,
                       #####################
-                      paciente_centro_salina=centro_salina_t2
+                      paciente_centro_salina=centro_salina_t2,
+                      #####################
+                      conteo_cd4=rep("-", times=5),
+                    #####################
+                      cd4_inicio=cd4_inicio_t2,
+                    #####################
+                    cd4_ingreso=cd4_ingreso_t2,
+                    #####################
+                    cd4_ultimos=cd4_ultima_t2,
+                    #####################
+                      carga_viral=rep("-", times=5),
+                    #####################
+                      cv_inicio=cv_inicio_t2,
+                    #####################
+                    cv_ingreso=cv_ingreso_t2,
+                    #####################
+                    cv_ultimos=cv_ultima_t2,
+                    #####################
+                      cv_inicio_indetect_50=cv_indetectable_inicial_50_t2,
+                      cv_inicio_indetect_200=cv_indetectable_inicial_200_t2,
+                    #####################
+                    cv_ingreso_indetect_50=cv_indetectable_ingreso_50_t2,
+                      cv_ingreso_indetect_200=cv_indetectable_ingreso_200_t2,
+                    #####################
+                    cv_ultima_indetect_50=cv_indetectable_ultima_50_t2,
+                      cv_ultima_indetect_200=cv_indetectable_ultima_200_t2
                       )
 
 
@@ -784,263 +948,374 @@ View(table_2)
 
 ```
 
-```{r pacientes y sexo, run = F, include = F, warning = F}
-#####ANÁLISIS DE BASE PRELIMINAR
-
-######La base quedó con el nombre'epi_oaxaca'
-glimpse(capasits_oaxaca)
-
-######Número de filas
-nrow(capasits_oaxaca)
-
-######Número de identificadores diferentes
-n_distinct(capasits_oaxaca$id_paciente)
-#Hay 5921 filas y 5920 identificadores diferentes
-glimpse(capasits_oaxaca %>% 
-  group_by(id_paciente) %>% 
-    count() %>% 
-  arrange(desc(n)))[1,1] 
-#51151 es el paciente que se repite
-glimpse(filter(capasits_oaxaca, id_paciente == 51151))#Únicamente difieren en el esquema de ART que está utilizando, por lo pronto no lo eliminaré
-
-######Pacientes en tratamiento ART ('paciente_tipo' según la variable de la base)
-table(capasits_oaxaca$paciente_tipo)
-#Al parecer todos los pacientes están clasificados como en tratamiento antirretroviral
-
-######Sexo 
-table(capasits_oaxaca$paciente_sexo)
-
-#Únicamente confirmar que 'TF' signifique mujer trans y que 'TM' signifique hombre trans
-```
-
-```{r include= T, run = F}
-#La base cuenta con una fila por paciente y una columna por variable, con solo un paciente repetido (aquel con el identificador `r glimpse(epi_oaxaca %>%group_by(id_paciente) %>% count() %>%arrange(desc(n)))[1,1]`). Las variables incluidas son las siguientes: `r names(epi_oaxaca)`.  
-
-#Según se puede inferir de la base, incluye la información más actualizada al momento en el cual se generó. Es decir, incluye algunas características basales(por ejemplo, 'fecha de ingreso') y otras que corresponden a la última medición para una variable determinada (por ejemplo, 'cd4 resultado').
-```
-
-```{r base oaxaca v1, run = F, include = F, warning = F}
-#####Edad
-fivenum(capasits_oaxaca$paciente_edad)
-nrow(filter(capasits_oaxaca, paciente_edad>=18))
-nrow(filter(capasits_oaxaca, paciente_edad>=18))/nrow(capasits_oaxaca)
-#Prácticamente todos son mayores de edad
-#La distribución de la edad parece razonable, pero si se puede lo mejor sería que nos dieran la fecha de nacimiento, desconozco cuándo y cómo actualicen la edad de los pacientes
+```{r tabla 3, run = F, include = F, warning=F}
+#Construiremos las variables que compondrán la tabla por separado para que sea más manejable
 
 
-#####Pacientes con VIH que están embarazadas (habría que preguntar exactamente cómo definen esta variable y con qué frecuencia la actualizan)
-table(capasits_oaxaca$paciente_vih_embarazada)
-#Descartar que haya errores de código en cuanto a sexo
-table(EMBARAZADA = capasits_oaxaca$paciente_vih_embarazada,
-      SEXO = capasits_oaxaca$paciente_sexo)
-#Parece que al hombre trans lo pusieron como 'NO APLICA'. Es un detalle pequeño, pero creo que valdría la pena que actualizaran esta codificación en su estado porque el término preferido actual es 'personas con capacidad de gestar' (nada más confirmar que por el hecho de ser trans no les asignen la variable de 'NO APLICA')
-#Hay 73 hombres que se clasificaron como 'NO' embarazadas, verificar si esto simplemente fue por error al meter los datos (ej. no sabían que se tenían que poner en 'NO APLICA' o si son hombres trans)
+capasits_oaxaca_t3 <- filter(capasits_oaxaca_t2, ano_diagnostico == c("2018", "2019", "2020", "2021"))
 
 
-######Última consulta
-range(capasits_oaxaca$paciente_ultima_consulta)#Hay pacientes sin info en última consulta
-sum(is.na(capasits_oaxaca$paciente_ultima_consulta))#Solo es uno
-glimpse(filter(capasits_oaxaca, is.na(paciente_ultima_consulta)))
-#Parece que si tiene último estatus, nomás no tiene fecha de última consulta, según los datos parece que en cuanto se captó se sacó del programa porque tenía ISSSTE, por el momento no creo que haya que excluirlo
+#Tipo de pacientes (todos son en trataimento ARV)
+paciente_tipo_t3 <- c(str_c(sum(capasits_oaxaca_t3$ano_diagnostico=="2018", na.rm = T), " (", round(sum(capasits_oaxaca_t3$ano_diagnostico=="2018", na.rm = T)/nrow(capasits_oaxaca_t3), 3)*100, "%)"),
+                                      str_c(sum(capasits_oaxaca_t3$ano_diagnostico=="2019", na.rm = T), " (", round(sum(capasits_oaxaca_t3$ano_diagnostico=="2019", na.rm = T)/nrow(capasits_oaxaca_t3), 3)*100, "%)"),
+                                      str_c(sum(capasits_oaxaca_t3$ano_diagnostico=="2020", na.rm = T), " (", round(sum(capasits_oaxaca_t3$ano_diagnostico=="2020", na.rm = T)/nrow(capasits_oaxaca_t3), 3)*100, "%)"),
+                                      str_c(sum(capasits_oaxaca_t3$ano_diagnostico=="2021", na.rm = T), " (", round(sum(capasits_oaxaca_t3$ano_diagnostico=="2021", na.rm = T)/nrow(capasits_oaxaca_t3), 3)*100, "%)"),
+                                      str_c(nrow(capasits_oaxaca_t3), " (100%)"))
 
-range(capasits_oaxaca$paciente_ultima_consulta[!is.na(capasits_oaxaca$paciente_ultima_consulta)])#Fecha de última consulta con rango implausible
-range(capasits_oaxaca$paciente_ultima_consulta[!is.na(capasits_oaxaca$paciente_ultima_consulta)&
-                                            capasits_oaxaca$paciente_ultima_consulta>="2000-01-01"])#Última fecha de consulta introducida en la base con la fecha más temprana (aparentemente real que no parece un error de codificación) en 2005
 
-nrow(filter(capasits_oaxaca, paciente_ultima_consulta>="2000-01-01"))#Únicamente dos pacientes con fecha de consulta previo a este año, uno de los cuales es el paciente con valor faltante en esa variable
 
-#La mayoría de pacientes tuvieron su última consulta en 2021
-epi_consulta <- mutate(capasits_oaxaca, year_ultima_consulta=year(paciente_ultima_consulta)) %>% 
-  group_by(year_ultima_consulta) %>% 
-  count() %>% 
-  mutate(year_ultima_consulta=as.factor(year_ultima_consulta))
 
-epi_consulta$n[epi_consulta$year_ultima_consulta ==2021]/sum(epi_consulta$n)
-#Dos tercios de pacientes tuvieron su última consulta en 2021
-ggplot(epi_consulta, aes(y=year_ultima_consulta, x = n))+
-  theme_bw()+
-  ggtitle("Año de última consulta en COESIDA de personas que viven con VIH")+
-  ylab("Año de última consulta")+
-  xlab("Número de pacientes")+
-  geom_segment(aes(yend = year_ultima_consulta), xend=0, colour="grey50", size = 1.5)+  
-  geom_point(size = 3.5, colour = "red")+
-  scale_x_continuous(breaks= seq(from = 0, to = 4000, by =250))+
-  theme(axis.text.x = element_text(angle=30))
+#Sexo de los pacientes
+paciente_sexo_fem_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sexo=="F"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sexo=="F")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sexo=="F"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sexo=="F")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sexo=="F"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sexo=="F")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_sexo=="F"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_sexo=="F")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           str_c(sum(capasits_oaxaca_t3$paciente_sexo=="F"), " (100%)"))
+
+
+paciente_sexo_masc_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sexo=="M"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sexo=="M")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sexo=="M"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sexo=="M")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sexo=="M"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sexo=="M")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_sexo=="M"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_sexo=="M")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           str_c(sum(capasits_oaxaca_t3$paciente_sexo=="M"), " (100%)"))
+
+
+paciente_sexo_mujtrans_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sexo=="TF"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sexo=="TF")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sexo=="TF"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sexo=="TF")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sexo=="TF"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sexo=="TF")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_sexo=="TF"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_sexo=="TF")/nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           str_c(sum(capasits_oaxaca_t3$paciente_sexo=="TF"), " (100%)"))
+
+
+
+#Edad de los pacientes (mediana y rango IQR)
+paciente_edad_t3 <- c(str_c(median(filter(capasits_oaxaca_t3, ano_diagnostico=="2018"&!is.na(paciente_edad))$paciente_edad), " (", fivenum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018"&!is.na(paciente_edad))$paciente_edad)[2],
+                           "-", fivenum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018"&!is.na(paciente_edad))$paciente_edad)[4], ")"),
+                     
+                     str_c(median(filter(capasits_oaxaca_t3, ano_diagnostico=="2019"&!is.na(paciente_edad))$paciente_edad), " (", fivenum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019"&!is.na(paciente_edad))$paciente_edad)[2],
+                           "-", fivenum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019"&!is.na(paciente_edad))$paciente_edad)[4], ")"),
+                     
+                     str_c(median(filter(capasits_oaxaca_t3, ano_diagnostico=="2020"&!is.na(paciente_edad))$paciente_edad), " (", fivenum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020"&!is.na(paciente_edad))$paciente_edad)[2],
+                           "-", fivenum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020"&!is.na(paciente_edad))$paciente_edad)[4], ")"),
+                     
+                     str_c(median(filter(capasits_oaxaca_t3, ano_diagnostico=="2021"&!is.na(paciente_edad))$paciente_edad), " (", fivenum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021"&!is.na(paciente_edad))$paciente_edad)[2],
+                           "-", fivenum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021"&!is.na(paciente_edad))$paciente_edad)[4], ")"),
+                     
+                     str_c(median(filter(capasits_oaxaca_t3, !is.na(paciente_edad))$paciente_edad), " (", fivenum(filter(capasits_oaxaca_t3, !is.na(paciente_edad))$paciente_edad)[2],
+                           "-", fivenum(filter(capasits_oaxaca_t3, !is.na(paciente_edad))$paciente_edad)[4], ")"))
+
+
+#Si la paciente estaba o no embarazada
+paciente_embarazada_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_vih_embarazada=="SI"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_vih_embarazada=="SI")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018"&paciente_sexo=="F")), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_vih_embarazada=="SI"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_vih_embarazada=="SI")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019"&paciente_sexo=="F")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_vih_embarazada=="SI"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_vih_embarazada=="SI")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020"&paciente_sexo=="F")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_vih_embarazada=="SI"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_vih_embarazada=="SI")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021"&paciente_sexo=="F")), 3)*100, "%)"),
+                           #
+                           str_c(sum(capasits_oaxaca_t3$paciente_vih_embarazada=="SI"), " (", 
+                                 round(sum(capasits_oaxaca_t3$paciente_vih_embarazada=="SI")/
+                                         sum(capasits_oaxaca_t3$paciente_sexo=="F"), 3)*100, "%)"))
+
+#Si la paciente estaba privada de su libertad
+
+paciente_privada_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_priv_libertad=="S"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_priv_libertad=="S")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_priv_libertad=="S"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_priv_libertad=="S")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_priv_libertad=="S"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_priv_libertad=="S")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_priv_libertad=="S"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_priv_libertad=="S")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           #
+                           str_c(sum(capasits_oaxaca_t3$paciente_priv_libertad=="S"), " (", 
+                                 round(sum(capasits_oaxaca_t3$paciente_priv_libertad=="S")/
+                                         nrow(capasits_oaxaca_t3), 3)*100, "%)"))
+
+
+#Si los pacientes tenían estatus de activo, desglosado por género
+paciente_estatus_activo_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_estatus=="ACTIVO"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_estatus=="ACTIVO")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_estatus=="ACTIVO"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_estatus=="ACTIVO")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_estatus=="ACTIVO"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_estatus=="ACTIVO")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_estatus=="ACTIVO"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_estatus=="ACTIVO")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           #
+                           str_c(sum(capasits_oaxaca_t3$paciente_estatus=="ACTIVO"), " (", 
+                                 round(sum(capasits_oaxaca_t3$paciente_estatus=="ACTIVO")/
+                                         nrow(capasits_oaxaca_t3), 3)*100, "%)"))
+  
+  
+  
+ 
+
+#Si los pacientes tenían estatus de baja, desglosado por género
+paciente_estatus_baja_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_estatus=="BAJA"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_estatus=="BAJA")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_estatus=="BAJA"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_estatus=="BAJA")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_estatus=="BAJA"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_estatus=="BAJA")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_estatus=="BAJA"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_estatus=="BAJA")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           #
+                           str_c(sum(capasits_oaxaca_t3$paciente_estatus=="BAJA"), " (", 
+                                 round(sum(capasits_oaxaca_t3$paciente_estatus=="BAJA")/
+                                         nrow(capasits_oaxaca_t3), 3)*100, "%)"))
+
+
+#Si los pacientes tenían estatus de derivación, desglosado por género
+
+paciente_estatus_derivacion_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           #
+                           str_c(sum(capasits_oaxaca_t3$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA"), " (", 
+                                 round(sum(capasits_oaxaca_t3$paciente_estatus=="EN DERIVACION DERECHOHABIENCIA")/
+                                         nrow(capasits_oaxaca_t3), 3)*100, "%)"))
+  
+  
   
 
-######Pacientes privados de su libertad
-table(capasits_oaxaca$paciente_priv_libertad)
-#Pocos pacientes privados de su libertad
-table(PRIVADOS_LIBERTAD=capasits_oaxaca$paciente_priv_libertad,
-      SEXO=capasits_oaxaca$paciente_sexo)
-#Distinción por sexo, a destacar que parece que no hay pacientes trans, lo cual podría significar a su vez algo bastante malo
+#Si los pacientes tenían estatus de suspensión, desglosado por género
+paciente_estatus_suspension_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_estatus=="EN SUSPENSION"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_estatus=="EN SUSPENSION")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_estatus=="EN SUSPENSION"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_estatus=="EN SUSPENSION")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_estatus=="EN SUSPENSION"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_estatus=="EN SUSPENSION")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_estatus=="EN SUSPENSION"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_estatus=="EN SUSPENSION")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           #
+                           str_c(sum(capasits_oaxaca_t3$paciente_estatus=="EN SUSPENSION"), " (", 
+                                 round(sum(capasits_oaxaca_t3$paciente_estatus=="EN SUSPENSION")/
+                                         nrow(capasits_oaxaca_t3), 3)*100, "%)"))
+  
+  
 
 
-######Paciente notificación. No estoy seguro que significa, será la fecha de diagnóstico?
-range(capasits_oaxaca$paciente_notificacion)#Algunos no tienen ese dato
-sum(is.na(capasits_oaxaca$paciente_notificacion))#Sólo 4
-glimpse(filter(capasits_oaxaca, is.na(paciente_notificacion)))#No encuentro una causa obvia para la falta de este dato, supongo que fue únicamente error al meter la información
-range(capasits_oaxaca$paciente_notificacion[!is.na(capasits_oaxaca$paciente_notificacion)])#Primera fecha de notificación en 1984, no creo que sea esta la fecha del primer caso de VIH en oaxaca, o sí? Habría que revisar
+#Tratamiento para incluir en la tabla
+ tratamiento_t3 <- filter(capasits_oaxaca_t3, ano_diagnostico == c("2018", "2019", "2020", "2021")) %>% 
+   group_by(ano_diagnostico, esquema) %>% 
+   count() %>% 
+   arrange(desc(n)) %>% 
+   ungroup() %>% 
+   group_by(ano_diagnostico) %>% 
+   slice(1)
 
-epi_notificacion <- mutate(capasits_oaxaca, year_paciente_notificacion=year(paciente_notificacion)) %>% 
-  group_by(year_paciente_notificacion) %>% 
+tratamiento_whole_t3 <- filter(capasits_oaxaca_t3, ano_diagnostico == c("2018", "2019", "2020", "2021")) %>% 
+  group_by( esquema) %>% 
   count() %>% 
-  mutate(year_paciente_notificacion=as.factor(year_paciente_notificacion))
-
-epi_notificacion$n[epi_notificacion$year_paciente_notificacion ==2021]/sum(epi_notificacion$n)
-#Sólo 7% se notificaron en 2021, supongo que si es la fecha de diagnóstico, pero habría que confirmar con quienes armaron la base
-ggplot(epi_notificacion, aes(y=year_paciente_notificacion, x = n))+
-  theme_bw()+
-  ggtitle("Año de notificación (diagnóstico?) de personas que viven con VIH en Oaxaca")+
-  ylab("Año de notificación")+
-  xlab("Número de pacientes")+
-  geom_segment(aes(yend = year_paciente_notificacion), xend=0, colour="grey50", size = 1.5)+  
-  geom_point(size = 3.5, colour = "red")+
-  scale_x_continuous(breaks= seq(from = 0, to = 500, by =50))+
-  theme(axis.text.x = element_text(angle=30))
+  arrange(desc(n)) 
 
 
-#####Paciente ingreso
-range(capasits_oaxaca$paciente_ingreso)#Algunos no tienen ese dato
-sum(is.na(capasits_oaxaca$paciente_ingreso))#Sólo 14
-glimpse(filter(capasits_oaxaca, is.na(paciente_ingreso)))#No encuentro una causa obvia para la falta de este dato, supongo que fue únicamente error al meter la información
-range(capasits_oaxaca$paciente_ingreso[!is.na(capasits_oaxaca$paciente_ingreso)])#Primera fecha de ingreso en 1994, este año se fundó COESIDA entonces supongo que si es únicamente referente a este servicio
+tratamiento_tab3 <- c(str_c(tratamiento_t3$esquema, " ", tratamiento_t3$n), str_c(tratamiento_whole_t3$esquema[1], " ", tratamiento_whole_t3$n[1]))
 
-epi_ingreso <- mutate(capasits_oaxaca, paciente_ingreso=year(paciente_ingreso)) %>% 
-  group_by(paciente_ingreso) %>% 
-  count() %>% 
-  mutate(paciente_ingreso=as.factor(paciente_ingreso))
-
-epi_ingreso$n[epi_ingreso$paciente_ingreso ==2021]/sum(epi_ingreso$n)
-#Sólo 7% ingresaron en 2021 (igual que el número de notificaciones/diagnósticos)
-
-ggplot(epi_ingreso, aes(y=paciente_ingreso, x = n))+
-  ggtitle("Año de ingreso a COESIDA de personas que viven con VIH")+
-  theme_bw()+
-  ylab("Año de ingreso")+
-  xlab("Número de pacientes")+
-  geom_segment(aes(yend = paciente_ingreso), xend=0, colour="grey50", size = 1.5)+  
-  geom_point(size = 3.5, colour = "red")+
-  scale_x_continuous(breaks= seq(from = 0, to = 500, by =50))+
-  theme(axis.text.x = element_text(angle=30))
-#Parece que ninguno se inactivó por la pandemia, al menos durante algún año completo
-
-
-#####Paciente SAI (centro de atención)
-table(capasits_oaxaca$paciente_sai)
-#Parece que sólo hay dos centros
-
-#Aquí quiero ver si los dos han estado siempre activos o si francamente alguno dejó de recibir pacientes en algún momento
-epi_sai <- mutate(capasits_oaxaca, paciente_ingreso=year(paciente_ingreso)) %>% 
-  group_by(paciente_sai, paciente_ingreso) %>% 
-  count() %>% 
-  mutate(paciente_ingreso=as.factor(paciente_ingreso))
+#Centro en donde reciben la atención
+centro_oaxaca_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sai=="CAPASITS - Oaxaca"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sai=="CAPASITS - Oaxaca")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sai=="CAPASITS - Oaxaca"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sai=="CAPASITS - Oaxaca")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sai=="CAPASITS - Oaxaca"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sai=="CAPASITS - Oaxaca")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_sai=="CAPASITS - Oaxaca"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_sai=="CAPASITS - Oaxaca")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           #
+                           str_c(sum(capasits_oaxaca_t3$paciente_sai=="CAPASITS - Oaxaca"), " (", 
+                                 round(sum(capasits_oaxaca_t3$paciente_sai=="CAPASITS - Oaxaca")/
+                                         nrow(capasits_oaxaca_t3), 3)*100, "%)"))
+  
 
 
-ggplot(epi_sai, aes(y=paciente_ingreso, x = n, fill = paciente_sai))+
-  ggtitle("Año de ingreso a COESIDA según SAI")+
-  theme_bw()+
-  ylab("Año de ingreso")+
-  xlab("Número de pacientes")+
-  geom_col(position=position_dodge(0.5), colour = "black")+  
-  scale_x_continuous(breaks= seq(from = 0, to = 500, by =50))+
-  theme(axis.text.x = element_text(angle=30))
-#Parece que ningún SAI dejó de funcionar (al menos durante un periodo prolongado)
+
+centro_salina_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sai=="CAPASITS - Salina Cruz"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")$paciente_sai=="CAPASITS - Salina Cruz")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2018")), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sai=="CAPASITS - Salina Cruz"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")$paciente_sai=="CAPASITS - Salina Cruz")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2019")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sai=="CAPASITS - Salina Cruz"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")$paciente_sai=="CAPASITS - Salina Cruz")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2020")), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(capasits_oaxaca_t3,ano_diagnostico=="2021")$paciente_sai=="CAPASITS - Salina Cruz"), " (", 
+                                 round(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")$paciente_sai=="CAPASITS - Salina Cruz")/
+                                         nrow(filter(capasits_oaxaca_t3, ano_diagnostico=="2021")), 3)*100, "%)"),
+                           #
+                           str_c(sum(capasits_oaxaca_t3$paciente_sai=="CAPASITS - Salina Cruz"), " (", 
+                                 round(sum(capasits_oaxaca_t3$paciente_sai=="CAPASITS - Salina Cruz")/
+                                         nrow(capasits_oaxaca_t3), 3)*100, "%)"))
+
+####TABLA 2 
+table_3 <- data.frame(ano_diagnostico=year_t,
+                      #####################
+                      paciente_tipo=paciente_tipo_t3,
+                      #####################
+                      paciente_sexo=rep("-", times=5),
+                      #####################
+                      paciente_sexo_mujer=paciente_sexo_fem_t3,
+                      #####################
+                      paciente_sexo_masc=paciente_sexo_masc_t3,
+                      #####################
+                      paciente_sexo_mujtrans=paciente_sexo_mujtrans_t3,
+                      #####################
+                      paciente_edad=paciente_edad_t3,
+                      #####################
+                      paciente_embarazada=paciente_embarazada_t3,
+                      #####################
+                      paciente_privada_libertad=paciente_privada_t3,
+                      #####################
+                      paciente_estatus=rep("-", times=5),
+                      #####################
+                      paciente_estatus_activo=paciente_estatus_activo_t3,
+                      #####################
+                      paciente_estatus_baja=paciente_estatus_baja_t3,
+                      #####################
+                      paciente_estatus_en_derivacion=paciente_estatus_derivacion_t3,
+                      #####################
+                      paciente_estatus_suspension=paciente_estatus_suspension_t3,
+                      #####################
+                      paciente_tratamiento= tratamiento_tab3,
+                      #####################
+                      paciente_centro=rep("-", times=5),
+                      #####################
+                      paciente_centro_oaxaca= centro_oaxaca_t3,
+                      #####################
+                      paciente_centro_salina=centro_salina_t3
+                      )
 
 
-#####Paciente fecha alta 
-sum(is.na(capasits_oaxaca$paciente_fecha_alta))
-#parece que todos tienen este dato. ¿A qué se refieren con fecha de alta? Definitivamente no es alta médica, ya que todas las persoans lo tienen, tampoco es fecha de ingreso porque difiere a la otra en las fechas
-range(capasits_oaxaca$paciente_fecha_alta)
+View(table_3)
 
-
-######Estatus de los pacientes
-table(capasits_oaxaca$paciente_estatus)
-#Habría que preguntar qué significan los siguientes dos estatus:
-#'EN DERIVACION DERECHOHABIENCIA"
-#'EN SUSPENSION'
-#Además, cuáles son los criterios para cada uno de los estados. ¿Cambiaron estos criterios con la pandemia? ¿Hubo algún periodo de inactividad en el cual no se actualizó el estatus de los pacientes (o peor, que el sistema de atención se mantuvo inactivo, al menos durante algunas semanas-meses)?
-
-
-#####Paciente causa baja
-table(capasits_oaxaca$paciente_causa_baja)
-#Cómo determinan que alguien se da de alta médica? Formalmente una persona que vive con VIH nunca está de alta médica. Cómo definieron abandono? Es posible que estos abandonos sean defunciones o migraciones no detectadas?
-
-
-#####Paciente fecha de defunción
-sum(!is.na(capasits_oaxaca$paciente_fecha_defuncion))
-#Este número (658) difiere al número de defunciones totales que tienen registradas (848), hay algún motivo por el cuál no se tenga la fecha de defunción?
-table(DEFUNCION_CON_FECHA=!is.na(capasits_oaxaca$paciente_fecha_defuncion),
-      CAUSA_DE_BAJA=capasits_oaxaca$paciente_causa_baja)
-#Aquí nomás podemos reclasificar a un paciente que tiene como causa de baja "ABANDONO" pero tiene una fecha de muerte
-#Quizá con la fecha de último estatus
-
-
-#Fecha de últimop estatus
-range(capasits_oaxaca$paciente_f_ultimo_estatus)
-#Todos tienen este dato, alguno de los que fallecieron tendrá una fecha posterior a la de muerte (o viceversa)?
-
-nrow(filter(capasits_oaxaca, (!is.na(paciente_fecha_defuncion)|paciente_causa_baja=="DEFUNCION")& paciente_f_ultimo_estatus>paciente_fecha_defuncion))
-#641 de quienes fallecieron tienen una fecha de úlimo estatus posterior a la fecha de muerte, en qué consta la fecha de últimoe estatus?
-
-nrow(filter(capasits_oaxaca, (!is.na(paciente_fecha_defuncion)|paciente_causa_baja=="DEFUNCION")& paciente_f_ultimo_estatus<paciente_fecha_defuncion))
-#Sólo 5 tienen una fecha de muerte posterior a la de último estatus, esto es más fácil de explicar y corregir
-
-
-#Esquema fecha inicio
-range(capasits_oaxaca$esquema_fecha_inicio)#Personas sin ese dato
-sum(is.na(capasits_oaxaca$esquema_fecha_inicio))#Sólo 70, tienen perdida la fecha de inicio de esquema o realmente nunca lo iniciaron?
-glimpse(filter(capasits_oaxaca, is.na(capasits_oaxaca$esquema_fecha_inicio)))
-#Sería interesante, una vez confirmado que la variable "paciente notificacion" corresponda a la fecha de diagnóstico, analizar cuánto tiempo tardaron en iniciar ARV desde el diagnóstico (que será lo que haremos con los datos de ccasanet, de aceptarlo Sierra, Brenda, y los demás de ccasanet)
-
-
-#####CD4
-sum(is.na(capasits_oaxaca$cd4_resultado))#270 nunca han tenido una toma de CD4 (quiero pensar que el valor incluido en esta base es el último para cada persona)
-#Sería estupendo que nos pasaran el resto de los CD4 para cada persona (igual que la CV)
-
-
-#####Carga viral
-sum(is.na(capasits_oaxaca$cv_no_copias))#304 nunca han tenido una cv, por qué difiere este número al de linfocitos CD4?
 
 ```
 
-```{r base capasits, eval= F, run = F, warning=F, include= F}
-plantilla_capasits <- plantilla_capasits %>% 
-  mutate(paciente_ultima_consulta= ymd(paciente_ultima_consulta),
-         paciente_notificacion= ymd(paciente_notificacion),
-         paciente_ingreso=ymd(paciente_ingreso),
-         paciente_fecha_alta=ymd(paciente_fecha_alta),
-         paciente_f_ultimo_estatus=ymd(substr(paciente_f_ultimo_estatus, 1, 10)),
-         esquema_fecha_inicio=ymd(esquema_fecha_inicio),
-         cd4_fecha_estudio=ymd(cd4_fecha_estudio),
-         cv_fecha_estudio=ymd(cv_fecha_estudio)) 
 
-nrow(plantilla_capasits)
+```{r figura 3 a y b, include= F, echo= F, warning=F}
 
-plantilla_capasits_filtrada <- filter(plantilla_capasits, (paciente_f_ultimo_estatus>="2018-01-01"|
-                 esquema_fecha_inicio>="2018-01-01"|
-                 paciente_ingreso>="2018-01-01"|
-                 paciente_notificacion>="2018-01-01"|
-                 paciente_ultima_consulta>="2018-01-01"|
-                 cd4_fecha_estudio>="2018-01-01"|
-                 cv_fecha_estudio>="2018-01-01"|
-                   paciente_fecha_alta>="2018-01-01")&
-                   (is.na(paciente_fecha_defuncion)|
-                   (!is.na(paciente_fecha_defuncion)&paciente_fecha_defuncion>="2018-01-01")))
+#División únicamente por año
+capasits_oaxaca_reciente_figura_not <- capasits_oaxaca_t3 %>% 
+  mutate(ano_notificacion= factor(year(paciente_notificacion))) %>% 
+  group_by(ano_notificacion, paciente_sai) %>% 
+  count()
 
 
-nrow(plantilla_capasits_filtrada)
+capasits_oaxaca_reciente_figura_not <- ggplot(capasits_oaxaca_reciente_figura_not, aes(x= as.integer(n), y=ano_notificacion, colour=paciente_sai))+
+  geom_segment(aes(yend = ano_notificacion), xend = 0, colour = "grey50")+
+  geom_point(size = 3)+
+  ggtitle("")+
+  theme_bw()+
+  ylab("Año de diagnóstico")+
+  xlab("# de pacientes")+
+  theme(panel.grid.major.y = element_blank(),
+        legend.title=element_blank(),
+        legend.position=c(0.4,0.3),
+        legend.text = element_text(size=7.5))+
+  scale_colour_viridis(discrete=TRUE)
+  
 
-nrow(filter(plantilla_capasits_filtrada, paciente_f_ultimo_estatus<"2018-01-01"&
-                 esquema_fecha_inicio<"2018-01-01"&
-                 paciente_ingreso<"2018-01-01"&
-                 paciente_notificacion<"2018-01-01"&
-                 paciente_ultima_consulta<"2018-01-01"&
-                 cd4_fecha_estudio<"2018-01-01"&
-                 cv_fecha_estudio<"2018-01-01"&
-                   paciente_fecha_alta<"2018-01-01"&
-              (is.na(paciente_fecha_defuncion)|!is.na(paciente_fecha_defuncion)&paciente_fecha_defuncion<"2018-01-01")))
+#División por sexo
+capasits_oaxaca_reciente_figura_s_not <- capasits_oaxaca_t3 %>% 
+  mutate(ano_notificacion= factor(year(paciente_notificacion)),
+         paciente_sexo= case_when(paciente_sexo=="F"~"Mujer cis",
+                                  paciente_sexo=="M"~"Hombre cis",
+                                  paciente_sexo=="TF"~"Mujer trans",
+                                  paciente_sexo=="TM"~"Hombre trans")) %>% 
+  group_by(ano_notificacion, paciente_sexo, paciente_sai) %>% 
+  count()
 
-#write.csv(plantilla_capasits_filtrada, "./plantilla_capasits_filtrada.csv", row.names=T)
+capasits_oaxaca_reciente_figura_s_not <- ggplot(capasits_oaxaca_reciente_figura_s_not, aes(x= as.integer(n), y=ano_notificacion, colour=paciente_sexo))+
+  geom_segment(aes(yend = ano_notificacion), xend = 0, colour = "grey50")+
+  geom_point( size = 3)+
+  ggtitle("")+
+  theme_bw()+
+  ylab("")+
+  xlab("# de pacientes")+
+  theme(panel.grid.major.y = element_blank(),
+          legend.title=element_blank(),
+        legend.position=c(0.7,0.2))+
+scale_colour_viridis(discrete=TRUE)+
+  facet_wrap(~paciente_sai, nrow=2)
+  
+figura_3 <- capasits_oaxaca_reciente_figura_not+capasits_oaxaca_reciente_figura_s_not+plot_annotation(tag_levels='A')
+
+
+ggsave(plot = figura_3, width = 6.1, height = 6.5, dpi = 300, filename = "figura_3.png")
+
+
 ```
+![Figura 3](figura_3.png)
+
 
