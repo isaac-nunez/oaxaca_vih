@@ -16,7 +16,7 @@ setwd("C:/Users/isaac/OneDrive/Documentos/Protocolos_de_investigacion/Chiapas-Oa
 
 ```{r first chunk, include = F, warning=F}
 library(tidyverse);library(lubridate); library(readxl);library(viridis);library(data.table);library(devtools); library(flextable);
-library(patchwork)
+library(patchwork); library(rms)
 #library(mxmaps)
 
 
@@ -1605,4 +1605,112 @@ ggsave(plot = figura_4, width = 9, height = 5, dpi = 300, filename = "figura_4.p
 ```
 ![Figura 4](figura_4.png)
 
+```{r  regresión logística para el desenlace de supresión virológica, include = F, warning= F}
+cv_log_ingreso <- filter(cv_oaxaca_t2, tipo_toma=="ultima") %>% 
+  mutate(fecha_dif_tomas =fecha_toma-paciente_ingreso) %>% 
+  filter(fecha_dif_tomas>=180)
+
+capasits_oaxaca_log_ingreso <- capasits_oaxaca_t2 %>% 
+  left_join(select(cv_log_ingreso, id_paciente, indetectable_200) %>% mutate(id_paciente=as.character(id_paciente)), by ="id_paciente") %>% 
+  filter(!is.na(indetectable_200))
+
+
+set.seed(1)
+
+ind <- sample(c(0,1), nrow(capasits_oaxaca_log_ingreso), replace = T, prob= c(0.7, 0.3))
+
+train <- capasits_oaxaca_log_ingreso[ind==1,]
+test <- capasits_oaxaca_log_ingreso[ind==2,]
+
+
+
+#EDAD DESENLACE HOSPITALIZACIÓN SATURACION HOSPITALARIA INTUBACION MISMA FECHA
+
+mymodel_cd4 <- glm(indetectable_200 ~ rcs(cd4_resultado, 3)+rcs(paciente_edad, 3)+paciente_sexo, 
+                          data = train, family = 'binomial')
+summary(mymodel_cd4)
+exp(coef(mymodel_cd4))
+exp(coef(mymodel_cd4)-(1.96*0.002))
+exp(coef(mymodel_cd4)+(1.96*0.002))
+
+lr_cd4 <- termplot(mymodel_cd4, se=TRUE, plot = F)$cd4
+center_cd4 <- with(lr_cd4, y[x==198])
+ci_cd4 <- lr_cd4$y + outer(lr_cd4$se, c(0, -1.96, 1.96), '*')
+
+cd4_df <- data.frame(cd4 = lr_cd4$x, 
+                     y = lr_cd4$y,
+                     se = lr_cd4$se,
+                     lower_ci = ci_cd4[,2],
+                     upper_ci = ci_cd4[,3],
+                     mean_ci = ci_cd4[,1])
+
+
+cd4_ors <- cd4_df[with(cd4_df, cd4 == 53 | cd4 == 98 | cd4 == 198 | 
+                         cd4 == 300 |cd4== 500),] %>% 
+  mutate(or = round(exp(y-center_cd4),2),
+         lower_or = round(exp(lower_ci-center_cd4),2),
+         upper_or = round(exp(upper_ci-center_cd4),2),
+         full_or = str_c(round(exp(y-center_cd4),2), " (", round(exp(lower_ci-center_cd4),2),
+                         "-", round(exp(upper_ci-center_cd4),2),")"))
+
+
+
+
+cd4_spline_plot <- ggplot(cd4_df, aes(x = cd4, 
+                                                        y = exp(y - center_cd4))) +
+  geom_hline(yintercept = seq(from = 0, to = 10, by = 2), colour = "lightgray") +
+  geom_hline(yintercept=1, colour = "black", size = .7)+
+  geom_smooth(se = F, colour = "darkred", size = 1.2) +
+  geom_smooth(se = F, colour = "darkred", linetype = "dashed", 
+              aes(y = exp(upper_ci - center_cd4)), size = .8) +
+  geom_smooth(se = F, colour = "darkred", linetype = "dashed", 
+              aes(y = exp(lower_ci - center_cd4)), size = .8) +
+  ylab("Odds ratio de supresión viral") +
+  xlab("Conteo de CD4")+
+  theme_light()+
+  theme(axis.text.x = element_text(size = 14, face = "bold", colour="black"),
+        axis.title.x = element_text(face = "bold", size = 14),
+        axis.ticks = element_line(size = 1, colour = "black"),
+        axis.title.y = element_text(face = "bold", size = 14),
+        axis.text.y = element_text(size = 14, face = "bold", colour = "black"),
+        plot.title = element_text(size = 14, face = "bold"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(colour = "black"))+
+  scale_y_continuous(limits = c(0, 10))+
+  scale_x_continuous(breaks = seq(0,600,100),
+                     limits = c(0, 600))
+
+
+#AÑO DE INGRESO
+mymodel_year <- glm(indetectable_200 ~ ano_ingreso+rcs(cd4_resultado, 3)+rcs(paciente_edad, 3)+paciente_sexo, 
+                          data = train, family = 'binomial')
+summary(mymodel_year)
+exp(coef(mymodel_year))
+exp(coef(mymodel_year)-(1.96*0.002))
+exp(coef(mymodel_year)+(1.96*0.002))
+
+lr_year <- termplot(mymodel_year, se=TRUE, plot = F)$ano_ingreso
+center_year <- with(lr_year, y[x==2019])
+ci_year <- lr_year$y + outer(lr_year$se, c(0, -1.96, 1.96), '*')
+
+year_df <- data.frame(year = lr_year$x, 
+                     y = lr_year$y,
+                     se = lr_year$se,
+                     lower_ci = ci_year[,2],
+                     upper_ci = ci_year[,3],
+                     mean_ci = ci_year[,1])
+
+
+year_ors <- year_df[with(year_df, year == 2018 | year == 2019 | year == 2020|year == 2021),] %>% 
+  mutate(or = round(exp(y-center_year),2),
+         lower_or = round(exp(lower_ci-center_year),2),
+         upper_or = round(exp(upper_ci-center_year),2),
+         full_or = str_c(round(exp(y-center_year),2), " (", round(exp(lower_ci-center_year),2),
+                         "-", round(exp(upper_ci-center_year),2),")"))
+
+
+
+```
 
