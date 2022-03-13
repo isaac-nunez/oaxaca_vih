@@ -1218,6 +1218,199 @@ centro_salina_t3 <- c(str_c(sum(filter(capasits_oaxaca_t3, ano_diagnostico=="201
                                  round(sum(capasits_oaxaca_t3$paciente_sai=="CAPASITS - Salina Cruz")/
                                          nrow(capasits_oaxaca_t3), 3)*100, "%)"))
 
+
+
+
+cd4_oaxaca_t3 <- filter(cd4_oaxaca_2018_2021, id_paciente%in%capasits_oaxaca_t3$id_paciente)
+
+#CD4 al inicio
+cd4_oaxaca_base_primera_toma_t3 <- mutate(cd4_oaxaca_t3, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  arrange(fecha_toma) %>% 
+  slice_head() %>% 
+  mutate(tipo_toma = "primera")
+
+cd4_oaxaca_base_ultima_toma_t3 <- mutate(cd4_oaxaca_t3, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  arrange(fecha_toma) %>% 
+  slice_tail()%>% 
+  mutate(tipo_toma = "ultima")
+
+cd4_oaxaca_base_toma_al_ingreso_t3 <- mutate(cd4_oaxaca_t3, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  mutate(tipo_toma = "ingreso") %>% 
+  left_join(select(capasits_oaxaca_t3, id_paciente,  paciente_ingreso) %>% mutate(id_paciente=as.double(id_paciente)), by= "id_paciente") %>% 
+  mutate(fecha_cd4_fecha_ingreso=ifelse(fecha_toma-paciente_ingreso>=0, fecha_toma-paciente_ingreso,
+                                        -(fecha_toma-paciente_ingreso))) %>% 
+  slice_min(fecha_cd4_fecha_ingreso)
+
+
+#Base con CD4 para oaxaca
+cd4_oaxaca_t3 <- rbind(cd4_oaxaca_base_primera_toma_t3, cd4_oaxaca_base_ultima_toma_t3, select(cd4_oaxaca_base_toma_al_ingreso_t3, -paciente_ingreso,
+                                                                                           -fecha_cd4_fecha_ingreso)) %>% 
+  left_join(select(capasits_oaxaca_t3, id_paciente,  paciente_ingreso) %>% mutate(id_paciente=as.double(id_paciente)), by= "id_paciente") %>% 
+  mutate(ano_ingreso=year(paciente_ingreso))
+
+
+
+cd4_tiempo_t3 <- function(x){
+  c(str_c(median(filter(cd4_oaxaca_t3, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado), " (", 
+                         fivenum(filter(cd4_oaxaca_t3, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t3, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cd4_oaxaca_t3, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cd4_oaxaca_t3, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t3, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cd4_oaxaca_t3, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cd4_oaxaca_t3, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t3, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cd4_oaxaca_t3, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cd4_oaxaca_t3, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t3, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cd4_oaxaca_t3, !is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cd4_oaxaca_t3, !is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cd4_oaxaca_t3, !is.na(resultado)&tipo_toma==x)$resultado)[4], ")"))
+}
+
+
+#Los primeros CD4 que se tomaron
+cd4_inicio_t3 <- cd4_tiempo_t3("primera")
+
+#CD4 más recientes tomados
+cd4_ultima_t3 <- cd4_tiempo_t3("ultima")
+
+#CD4 al ingreso
+cd4_ingreso_t3 <- cd4_tiempo_t3("ingreso")
+
+
+
+###CARGA VIRAL
+cv_oaxaca_t3 <- filter(cv_oaxaca_2018_2021, id_paciente%in%capasits_oaxaca_t3$id_paciente)
+
+
+#Cv al inicio
+cv_oaxaca_base_primera_toma_t3 <- mutate(cv_oaxaca_t3, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  arrange(fecha_toma) %>% 
+  slice_head() %>% 
+  mutate(tipo_toma = "primera")
+
+cv_oaxaca_base_ultima_toma_t3 <- mutate(cv_oaxaca_t3, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  arrange(fecha_toma) %>% 
+  slice_tail()%>% 
+  mutate(tipo_toma = "ultima")
+
+cv_oaxaca_base_toma_al_ingreso_t3 <- mutate(cv_oaxaca_t3, 
+                             fecha_toma = ymd(fecha_toma)) %>% 
+  group_by(id_paciente) %>% 
+  mutate(tipo_toma = "ingreso") %>% 
+  left_join(select(capasits_oaxaca_t3, id_paciente,  paciente_ingreso) %>% mutate(id_paciente=as.double(id_paciente)), by= "id_paciente") %>% 
+  mutate(fecha_cv_fecha_ingreso=ifelse(fecha_toma-paciente_ingreso>=0, fecha_toma-paciente_ingreso,
+                                        -(fecha_toma-paciente_ingreso))) %>% 
+  slice_min(fecha_cv_fecha_ingreso)
+
+
+#Base con cv para oaxaca
+cv_oaxaca_t3 <- rbind(cv_oaxaca_base_primera_toma_t3, cv_oaxaca_base_ultima_toma_t3, select(cv_oaxaca_base_toma_al_ingreso_t3, -paciente_ingreso,
+                                                                                           -fecha_cv_fecha_ingreso)) %>% 
+  left_join(select(capasits_oaxaca_t3, id_paciente,  paciente_ingreso) %>% mutate(id_paciente=as.double(id_paciente)), by= "id_paciente") %>% 
+  mutate(ano_ingreso=year(paciente_ingreso),
+         indetectable_50=ifelse(resultado<=50, T, F),
+         indetectable_200=ifelse(resultado<=200, T, F))
+
+
+
+cv_tiempo_t3 <- function(x){
+  c(str_c(median(filter(cv_oaxaca_t3, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado), " (", 
+                         fivenum(filter(cv_oaxaca_t3, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t3, ano_ingreso=="2018"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cv_oaxaca_t3, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cv_oaxaca_t3, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t3, ano_ingreso=="2019"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cv_oaxaca_t3, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cv_oaxaca_t3, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t3, ano_ingreso=="2020"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cv_oaxaca_t3, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cv_oaxaca_t3, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t3, ano_ingreso=="2021"&!is.na(resultado)&tipo_toma==x)$resultado)[4], ")"),
+                     
+                     str_c(median(filter(cv_oaxaca_t3, !is.na(resultado)&tipo_toma==x)$resultado), " (", fivenum(filter(cv_oaxaca_t3, !is.na(resultado)&tipo_toma==x)$resultado)[2],
+                           "-", fivenum(filter(cv_oaxaca_t3, !is.na(resultado)&tipo_toma==x)$resultado)[4], ")"))
+}
+
+
+
+#Los primeros CD4 que se tomaron
+cv_inicio_t3 <- cv_tiempo_t3("primera")
+
+#CD4 más recientes tomados
+cv_ultima_t3 <- cv_tiempo_t3("ultima")
+
+#CD4 al ingreso
+cv_ingreso_t3 <- cv_tiempo_t3("ingreso")
+
+
+##########Carga viral indetectable
+cv_indetectable_t3 <- function(x, y){
+  if(y==50){
+  c(str_c(sum(filter(cv_oaxaca_t3, ano_ingreso=="2018"&tipo_toma==x)$indetectable_50==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t3, ano_ingreso=="2018"&tipo_toma==x)$indetectable_50==T)/
+                                         nrow(filter(cv_oaxaca_t3, ano_ingreso=="2018"&tipo_toma==x)), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(cv_oaxaca_t3, ano_ingreso=="2019"&tipo_toma==x)$indetectable_50==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t3, ano_ingreso=="2019"&tipo_toma==x)$indetectable_50==T)/
+                                         nrow(filter(cv_oaxaca_t3, ano_ingreso=="2019"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(cv_oaxaca_t3, ano_ingreso=="2020"&tipo_toma==x)$indetectable_50==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t3, ano_ingreso=="2020"&tipo_toma==x)$indetectable_50==T)/
+                                         nrow(filter(cv_oaxaca_t3, ano_ingreso=="2020"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(cv_oaxaca_t3,ano_ingreso=="2021"&tipo_toma==x)$indetectable_50==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t3, ano_ingreso=="2021"&tipo_toma==x)$indetectable_50==T)/
+                                         nrow(filter(cv_oaxaca_t3, ano_ingreso=="2021"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(cv_oaxaca_t3$indetectable_50==T), " (", 
+                                 round(sum(cv_oaxaca_t3$indetectable_50==T)/
+                                         nrow(cv_oaxaca_t3), 3)*100, "%)"))
+  }else{
+      c(str_c(sum(filter(cv_oaxaca_t3, ano_ingreso=="2018"&tipo_toma==x)$indetectable_200==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t3, ano_ingreso=="2018"&tipo_toma==x)$indetectable_200==T)/
+                                         nrow(filter(cv_oaxaca_t3, ano_ingreso=="2018"&tipo_toma==x)), 3)*100, "%)"),
+                          #  
+                           str_c(sum(filter(cv_oaxaca_t3, ano_ingreso=="2019"&tipo_toma==x)$indetectable_200==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t3, ano_ingreso=="2019"&tipo_toma==x)$indetectable_200==T)/
+                                         nrow(filter(cv_oaxaca_t3, ano_ingreso=="2019"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(cv_oaxaca_t3, ano_ingreso=="2020"&tipo_toma==x)$indetectable_200==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t3, ano_ingreso=="2020"&tipo_toma==x)$indetectable_200==T)/
+                                         nrow(filter(cv_oaxaca_t3, ano_ingreso=="2020"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(filter(cv_oaxaca_t3,ano_ingreso=="2021"&tipo_toma==x)$indetectable_200==T), " (", 
+                                 round(sum(filter(cv_oaxaca_t3, ano_ingreso=="2021"&tipo_toma==x)$indetectable_200==T)/
+                                         nrow(filter(cv_oaxaca_t3, ano_ingreso=="2021"&tipo_toma==x)), 3)*100, "%)"),
+                           #
+                           str_c(sum(cv_oaxaca_t3$indetectable_200==T), " (", 
+                                 round(sum(cv_oaxaca_t3$indetectable_200==T)/
+                                         nrow(cv_oaxaca_t3), 3)*100, "%)"))
+  }
+}
+#Carga viral más reciente (sólo si al menos 6 meses de seguimiento)
+cv_indetectable_inicial_50_t3 <- cv_indetectable_t3(x="primera", y=50)
+cv_indetectable_inicial_200_t3 <- cv_indetectable_t3(x="primera", y=200)
+
+#Carga viral más reciente (sólo si al menos 6 meses de seguimiento)
+cv_indetectable_ultima_50_t3 <- cv_indetectable_t3(x="ultima", y=50)
+cv_indetectable_ultima_200_t3 <- cv_indetectable_t3(x="ultima", y=200)
+
+#Carga viral más reciente (sólo si al menos 6 meses de seguimiento)
+cv_indetectable_ingreso_50_t3 <- cv_indetectable_t3(x="ingreso", y=50)
+cv_indetectable_ingreso_200_t3 <- cv_indetectable_t3(x="ingreso", y=200)
+
 ####TABLA 2 
 table_3 <- data.frame(ano_diagnostico=year_t,
                       #####################
@@ -1253,8 +1446,34 @@ table_3 <- data.frame(ano_diagnostico=year_t,
                       #####################
                       paciente_centro_oaxaca= centro_oaxaca_t3,
                       #####################
-                      paciente_centro_salina=centro_salina_t3
+                      paciente_centro_salina=centro_salina_t3,
+                      #####################
+                      conteo_cd4=rep("-", times=5),
+                    #####################
+                      cd4_inicio=cd4_inicio_t3,
+                    #####################
+                    cd4_ingreso=cd4_ingreso_t3,
+                    #####################
+                    cd4_ultimos=cd4_ultima_t3,
+                    #####################
+                      carga_viral=rep("-", times=5),
+                    #####################
+                      cv_inicio=cv_inicio_t3,
+                    #####################
+                    cv_ingreso=cv_ingreso_t3,
+                    #####################
+                    cv_ultimos=cv_ultima_t3,
+                    #####################
+                      cv_inicio_indetect_50=cv_indetectable_inicial_50_t3,
+                      cv_inicio_indetect_200=cv_indetectable_inicial_200_t3,
+                    #####################
+                    cv_ingreso_indetect_50=cv_indetectable_ingreso_50_t3,
+                      cv_ingreso_indetect_200=cv_indetectable_ingreso_200_t3,
+                    #####################
+                    cv_ultima_indetect_50=cv_indetectable_ultima_50_t3,
+                      cv_ultima_indetect_200=cv_indetectable_ultima_200_t3
                       )
+                      
 
 
 View(table_3)
